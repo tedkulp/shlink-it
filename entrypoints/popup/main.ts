@@ -11,6 +11,7 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './style.css';
 import $ from 'jquery';
+import { parseMaxVisits } from '@/utils/max-visits';
 
 interface Settings {
   shlinkUrl?: string;
@@ -48,7 +49,17 @@ $(() => {
         .split(' ')
         .filter((s) => s && s !== '');
       const customSlug = $<HTMLInputElement>('#saveSlug').val() || null;
-      const maxVisits = $<HTMLInputElement>('#saveMaxVisits').val() || null;
+      // A number input reports unparseable text (e.g. "abc") as "", so
+      // check badInput to reject it instead of treating it as unlimited.
+      const maxVisitsInput = $<HTMLInputElement>('#saveMaxVisits')[0]!;
+      let maxVisits: number | null;
+      try {
+        maxVisits = parseMaxVisits(
+          maxVisitsInput.validity.badInput ? 'invalid' : maxVisitsInput.value,
+        );
+      } catch (e) {
+        return Promise.reject(e);
+      }
 
       console.debug('tags', tags);
 
@@ -171,7 +182,7 @@ $(() => {
       });
 
     $('#shlinkUrl').text(data.shlinkUrl as string);
-    $('#saveTags').val(data.defaultTags + ' ');
+    $('#saveTags').val(data.defaultTags ? data.defaultTags + ' ' : '');
     $('#submitBtn').on('click', handleButtonClick);
   });
 });
