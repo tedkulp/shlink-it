@@ -18,7 +18,7 @@ Built with [WXT](https://wxt.dev) + TypeScript, managed with pnpm. Requires Node
 - `pnpm lint`: Biome check (lint + formatting + import order; config in `biome.json`). `pnpm format` applies Biome's safe fixes and formatting. Style is 2-space indent, single quotes.
 - `pnpm test`: Vitest unit tests in `test/*.test.ts` (`vitest.config.ts` uses WXT's `WxtVitest` plugin, so tests import via `@/`). `pnpm test:watch` for watch mode.
 
-No CI yet; run `pnpm lint`, `pnpm typecheck` and `pnpm test` before committing.
+CI (`.github/workflows/ci.yml`, GitHub Actions) runs on every pull request and on pushes to `master`: `pnpm install --frozen-lockfile`, then `lint`, `typecheck`, `test`, `build`, `build -b firefox`. Run the same locally before committing. The pnpm version CI uses comes from `packageManager` in `package.json`; keep it in step with the lockfile, and commit `pnpm-lock.yaml` with any dependency change or the frozen install fails.
 
 ## Architecture
 
