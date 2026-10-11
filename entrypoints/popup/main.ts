@@ -11,13 +11,14 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './style.css';
 import { byId } from '@/utils/dom';
-import { parseMaxVisits } from '@/utils/max-visits';
 import type { Settings } from '@/utils/settings';
+import {
+  buildShortUrlBody,
+  responseErrorMessage,
+  type ShortUrlBody,
+  type ShortUrlResult,
+} from '@/utils/shlink';
 import { initialTagsValue } from '@/utils/tags';
-
-interface ShortUrlResult {
-  shortUrl: string;
-}
 
 // Module scripts run after the document is parsed, so the DOM is ready here.
 browser.storage.local.get().then((data: Settings) => {
@@ -40,46 +41,35 @@ browser.storage.local.get().then((data: Settings) => {
       );
     }
 
-    const title = byId<HTMLInputElement>('saveTitle').value || defaultTitle;
-    const tags = byId<HTMLInputElement>('saveTags')
-      .value.split(' ')
-      .filter((s) => s && s !== '');
-    const customSlug = byId<HTMLInputElement>('saveSlug').value || null;
     // A number input reports unparseable text (e.g. "abc") as "", so
     // check badInput to reject it instead of treating it as unlimited.
     const maxVisitsInput = byId<HTMLInputElement>('saveMaxVisits');
-    let maxVisits: number | null;
+    let body: ShortUrlBody;
     try {
-      maxVisits = parseMaxVisits(
-        maxVisitsInput.validity.badInput ? 'invalid' : maxVisitsInput.value,
-      );
+      body = buildShortUrlBody(url, defaultTitle, {
+        title: byId<HTMLInputElement>('saveTitle').value,
+        tags: byId<HTMLInputElement>('saveTags').value,
+        customSlug: byId<HTMLInputElement>('saveSlug').value,
+        maxVisits: maxVisitsInput.validity.badInput
+          ? 'invalid'
+          : maxVisitsInput.value,
+      });
     } catch (e) {
       return Promise.reject(e);
     }
-
-    console.debug('tags', tags);
 
     const headers = new Headers();
     headers.append('accept', 'application/json');
     headers.append('Content-Type', 'application/json');
     headers.append('X-Api-Key', data.apiKey);
 
-    const options = {
-      longUrl: url,
-      findIfExists: true,
-      title,
-      tags,
-      customSlug,
-      maxVisits,
-    };
-
-    console.debug('options', options);
+    console.debug('body', body);
 
     return fetch(
       new Request(`${data.shlinkUrl}/rest/v2/short-urls`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(options),
+        body: JSON.stringify(body),
       }),
     );
   };
@@ -120,27 +110,10 @@ browser.storage.local.get().then((data: Settings) => {
   function validateResponse(fetchResponse: Response): Promise<ShortUrlResult> {
     if (fetchResponse.ok) {
       return fetchResponse.json();
-    } else if (fetchResponse.status >= 400 && fetchResponse.status < 500) {
-      return Promise.reject(
-        new Error(
-          `Got error code ${fetchResponse.status}. ` +
-            "Please check if you've configured the Shlink extension correctly.",
-        ),
-      );
-    } else if (fetchResponse.status >= 500 && fetchResponse.status < 600) {
-      return Promise.reject(
-        new Error(
-          `Got error code ${fetchResponse.status}. ` +
-            'Please check if the Shlink server is properly configured.',
-        ),
-      );
-    } else {
-      return Promise.reject(
-        new Error(
-          `Got unknown error code ${fetchResponse.status}. Please try again later.`,
-        ),
-      );
     }
+    return Promise.reject(
+      new Error(responseErrorMessage(fetchResponse.status)),
+    );
   }
 
   const closeWindow = () => {
