@@ -3,7 +3,6 @@ body {
 }
 
 .form-label-xs {
-  font-size: 0.75rem;
   height: calc(1em + 0.25rem + 2px) !important;
   padding: 0.25rem 0.125rem !important;
   font-size: 0.75rem !important;

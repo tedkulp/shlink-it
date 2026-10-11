@@ -116,9 +116,7 @@ browser.storage.local.get().then((data: Settings) => {
     );
   }
 
-  function validateResponse(
-    fetchResponse: Response,
-  ): Promise<ShortUrlResult> {
+  function validateResponse(fetchResponse: Response): Promise<ShortUrlResult> {
     if (fetchResponse.ok) {
       return fetchResponse.json();
     } else if (fetchResponse.status >= 400 && fetchResponse.status < 500) {
@@ -162,20 +160,19 @@ browser.storage.local.get().then((data: Settings) => {
       .catch(failureNotification);
   };
 
-  browser.tabs
-    .query({ active: true, currentWindow: true })
-    .then((tabData) => {
-      console.debug('Tab Data', tabData);
+  browser.tabs.query({ active: true, currentWindow: true }).then((tabData) => {
+    console.debug('Tab Data', tabData);
 
-      // Same as the original JS: these may be undefined on special pages.
-      const tab = tabData[0]!;
-      saveUrl = tab.url as string;
-      saveTitle = tab.title as string;
+    // Same as the original JS: these may be undefined on special pages.
+    // biome-ignore lint/style/noNonNullAssertion: the active-tab query always returns the popup's tab.
+    const tab = tabData[0]!;
+    saveUrl = tab.url as string;
+    saveTitle = tab.title as string;
 
-      // jQuery's .val(undefined) cleared the field; keep that, not "undefined".
-      byId<HTMLInputElement>('saveUrl').value = saveUrl ?? '';
-      byId<HTMLInputElement>('saveTitle').value = saveTitle ?? '';
-    });
+    // jQuery's .val(undefined) cleared the field; keep that, not "undefined".
+    byId<HTMLInputElement>('saveUrl').value = saveUrl ?? '';
+    byId<HTMLInputElement>('saveTitle').value = saveTitle ?? '';
+  });
 
   byId('shlinkUrl').textContent = data.shlinkUrl ?? '';
   byId<HTMLInputElement>('saveTags').value = data.defaultTags

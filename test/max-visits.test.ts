@@ -1,5 +1,5 @@
-import test from 'node:test';
 import assert from 'node:assert';
+import test from 'node:test';
 import { parseMaxVisits } from '../utils/max-visits.ts';
 
 test('empty input means unlimited (null)', () => {
