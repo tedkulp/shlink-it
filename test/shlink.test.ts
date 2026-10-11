@@ -5,7 +5,7 @@ const form = {
   title: '',
   tags: '',
   customSlug: '',
-  maxVisits: '',
+  maxVisits: { value: '', badInput: false },
 };
 
 describe('buildShortUrlBody', () => {
@@ -52,13 +52,28 @@ describe('buildShortUrlBody', () => {
   });
 
   it('sends max visits as a number', () => {
-    const body = buildShortUrlBody('u', 'Tab', { ...form, maxVisits: '7' });
+    const body = buildShortUrlBody('u', 'Tab', {
+      ...form,
+      maxVisits: { value: '7', badInput: false },
+    });
     expect(body.maxVisits).toBe(7);
   });
 
   it('throws on invalid max visits', () => {
     expect(() =>
-      buildShortUrlBody('u', 'Tab', { ...form, maxVisits: 'abc' }),
+      buildShortUrlBody('u', 'Tab', {
+        ...form,
+        maxVisits: { value: 'abc', badInput: false },
+      }),
+    ).toThrow(/positive whole number/);
+  });
+
+  it('throws when the max visits input reports bad input', () => {
+    expect(() =>
+      buildShortUrlBody('u', 'Tab', {
+        ...form,
+        maxVisits: { value: '', badInput: true },
+      }),
     ).toThrow(/positive whole number/);
   });
 });

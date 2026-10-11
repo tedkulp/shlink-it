@@ -41,8 +41,6 @@ browser.storage.local.get().then((data: Settings) => {
       );
     }
 
-    // A number input reports unparseable text (e.g. "abc") as "", so
-    // check badInput to reject it instead of treating it as unlimited.
     const maxVisitsInput = byId<HTMLInputElement>('saveMaxVisits');
     let body: ShortUrlBody;
     try {
@@ -50,9 +48,10 @@ browser.storage.local.get().then((data: Settings) => {
         title: byId<HTMLInputElement>('saveTitle').value,
         tags: byId<HTMLInputElement>('saveTags').value,
         customSlug: byId<HTMLInputElement>('saveSlug').value,
-        maxVisits: maxVisitsInput.validity.badInput
-          ? 'invalid'
-          : maxVisitsInput.value,
+        maxVisits: {
+          value: maxVisitsInput.value,
+          badInput: maxVisitsInput.validity.badInput,
+        },
       });
     } catch (e) {
       return Promise.reject(e);

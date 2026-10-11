@@ -1,4 +1,4 @@
-import { parseMaxVisits } from './max-visits';
+import { type MaxVisitsField, parseMaxVisits } from './max-visits';
 import { parseTags } from './tags';
 
 // Raw values of the popup's form fields.
@@ -6,8 +6,7 @@ export interface ShortUrlForm {
   title: string;
   tags: string;
   customSlug: string;
-  // Pass a non-numeric string when the number input reports badInput.
-  maxVisits: string;
+  maxVisits: MaxVisitsField;
 }
 
 // Body of POST /rest/v2/short-urls.
