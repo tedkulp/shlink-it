@@ -12,12 +12,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import './style.css';
 import $ from 'jquery';
 import { parseMaxVisits } from '@/utils/max-visits';
-
-interface Settings {
-  shlinkUrl?: string;
-  apiKey?: string;
-  defaultTags?: string;
-}
+import type { Settings } from '@/utils/settings';
 
 interface ShortUrlResult {
   shortUrl: string;

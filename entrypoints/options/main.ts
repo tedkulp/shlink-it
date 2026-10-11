@@ -2,6 +2,7 @@
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 import $ from 'jquery';
+import type { Settings } from '@/utils/settings';
 
 $(() => {
   const shlinkUrl = $<HTMLInputElement>('#shlinkUrl');
@@ -37,11 +38,11 @@ $(() => {
       );
   };
 
-  browser.storage.local.get().then((data) => {
+  browser.storage.local.get().then((data: Settings) => {
     console.debug(data);
-    shlinkUrl.val((data.shlinkUrl as string | undefined) || '');
-    apiKey.val((data.apiKey as string | undefined) || '');
-    defaultTags.val((data.defaultTags as string | undefined) || '');
+    shlinkUrl.val(data.shlinkUrl || '');
+    apiKey.val(data.apiKey || '');
+    defaultTags.val(data.defaultTags || '');
   });
 
   $('#submitBtn').on('click', handleButtonClick);
