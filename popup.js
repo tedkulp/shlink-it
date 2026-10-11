@@ -34,7 +34,17 @@ $(document).ready(() => {
         .split(" ")
         .filter((s) => s && s !== "");
       const customSlug = $("#saveSlug").val() || null;
-      const maxVisits = $("#saveMaxVisits").val() || null;
+      // A number input reports unparseable text (e.g. "abc") as "", so
+      // check badInput to reject it instead of treating it as unlimited.
+      const maxVisitsInput = $("#saveMaxVisits")[0];
+      let maxVisits;
+      try {
+        maxVisits = parseMaxVisits(
+          maxVisitsInput.validity.badInput ? "invalid" : maxVisitsInput.value
+        );
+      } catch (e) {
+        return Promise.reject(e);
+      }
 
       console.debug("tags", tags);
 
