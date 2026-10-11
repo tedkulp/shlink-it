@@ -12,7 +12,7 @@ Built with [WXT](https://wxt.dev) + TypeScript, managed with pnpm. Requires Node
 
 - `pnpm install`: install deps (also runs `wxt prepare`, which generates `.wxt/` types).
 - `pnpm dev`: dev build to `.output/chrome-mv3-dev/` with hot reload; launches a browser with the extension loaded. `pnpm dev:firefox` for Firefox.
-- `pnpm build` / `pnpm build -b firefox`: production build to `.output/chrome-mv3/` or `.output/firefox-mv3/`. Load the Chrome one via `chrome://extensions` → Developer mode → "Load unpacked".
+- `pnpm build` / `pnpm build:firefox`: production build to `.output/chrome-mv3/` or `.output/firefox-mv3/`. Load the Chrome one via `chrome://extensions` → Developer mode → "Load unpacked".
 - `pnpm zip` / `pnpm zip:firefox`: release zip in `.output/`. The `version` in `package.json` drives the manifest version; see "Releasing" below.
 - `pnpm typecheck` (alias `pnpm compile`): `tsc --noEmit`.
 - `pnpm lint`: Biome check (lint + formatting + import order; config in `biome.json`). `pnpm format` applies Biome's safe fixes and formatting. Style is 2-space indent, single quotes.
@@ -31,7 +31,7 @@ git push --follow-tags
 
 The first release built by this workflow is `0.2.0` (from `0.1.0` via `pnpm version minor`).
 
-The tag push runs `.github/workflows/release.yml`: it checks the store secrets, fails if the tagged commit isn't on `master` or the tag isn't `v` + the `package.json` version, runs lint/typecheck/test, zips Chrome and Firefox (`pnpm zip`, `pnpm zip -b firefox`), creates a GitHub Release for the tag with `shlink-it-X.Y.Z-chrome.zip` and `shlink-it-X.Y.Z-firefox.zip` attached, then runs `wxt submit` to upload the Chrome zip to the existing Chrome Web Store listing and submit it for review. Firefox is not submitted to AMO; its zip is only attached to the release. Re-running a failed job re-uploads the zips to the existing release. Running the workflow manually (Actions → Release → Run workflow) is a dry run: it builds the zips and runs `wxt submit` with `DRY_RUN=true`, which checks the credentials against the store without creating a release or uploading.
+The tag push runs `.github/workflows/release.yml`: it checks the store secrets, fails if the tagged commit isn't on `master` or the tag isn't `v` + the `package.json` version, runs lint/typecheck/test, zips Chrome and Firefox (`pnpm zip`, `pnpm zip:firefox`), creates a GitHub Release for the tag with `shlink-it-X.Y.Z-chrome.zip` and `shlink-it-X.Y.Z-firefox.zip` attached, then runs `wxt submit` to upload the Chrome zip to the existing Chrome Web Store listing and submit it for review. Firefox is not submitted to AMO; its zip is only attached to the release. Re-running a failed job re-uploads the zips to the existing release. Running the workflow manually (Actions → Release → Run workflow) is a dry run: it builds the zips and runs `wxt submit` with `DRY_RUN=true`, which checks the credentials against the store without creating a release or uploading.
 
 `wxt submit` uses Chrome Web Store API v2 with a service account (`CHROME_API_VERSION: v2` in the workflow). Don't switch it to the OAuth client ID / client secret / refresh token flow: that's API v1.1, which Google shuts down on 2026-10-15.
 
