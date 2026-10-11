@@ -2,7 +2,7 @@
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { byId } from '@/utils/dom';
-import type { Settings } from '@/utils/settings';
+import { loadSettings, normalizeShlinkUrl } from '@/utils/settings';
 
 // Module scripts run after the document is parsed, so the DOM is ready here.
 const shlinkUrl = byId<HTMLInputElement>('shlinkUrl');
@@ -24,6 +24,9 @@ const showStatus = (ok: boolean, message: string) => {
 const handleButtonClick = (evt?: Event) => {
   if (evt) evt.preventDefault();
 
+  // Show what gets saved, so a trailing slash or space visibly goes away.
+  shlinkUrl.value = normalizeShlinkUrl(shlinkUrl.value);
+
   browser.storage.local
     .set({
       shlinkUrl: shlinkUrl.value,
@@ -39,11 +42,18 @@ const handleButtonClick = (evt?: Event) => {
     );
 };
 
-browser.storage.local.get().then((data: Settings) => {
-  console.debug(data);
-  shlinkUrl.value = data.shlinkUrl || '';
-  apiKey.value = data.apiKey || '';
-  defaultTags.value = data.defaultTags || '';
-});
+loadSettings()
+  .then((data) => {
+    console.debug(data);
+    shlinkUrl.value = data.shlinkUrl || '';
+    apiKey.value = data.apiKey || '';
+    defaultTags.value = data.defaultTags || '';
+  })
+  .catch((err: unknown) =>
+    showStatus(
+      false,
+      `Could not load settings: ${(err as Error | undefined)?.message || err}`,
+    ),
+  );
 
 byId('submitBtn').addEventListener('click', handleButtonClick);

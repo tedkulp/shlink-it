@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildShortUrlBody, responseErrorMessage } from '@/utils/shlink';
+import {
+  buildShortUrlBody,
+  responseErrorMessage,
+  shortUrlsEndpoint,
+} from '@/utils/shlink';
 
 const form = {
   title: '',
@@ -123,4 +127,22 @@ describe('responseErrorMessage', () => {
       );
     },
   );
+});
+
+describe('shortUrlsEndpoint', () => {
+  it.each([
+    'https://s.example.com',
+    'https://s.example.com/',
+    ' https://s.example.com// ',
+  ])('builds the create-short-URL endpoint from %j', (shlinkUrl) => {
+    expect(shortUrlsEndpoint(shlinkUrl)).toBe(
+      'https://s.example.com/rest/v2/short-urls',
+    );
+  });
+
+  it('keeps a path prefix', () => {
+    expect(shortUrlsEndpoint('https://example.com/shlink/')).toBe(
+      'https://example.com/shlink/rest/v2/short-urls',
+    );
+  });
 });

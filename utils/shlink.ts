@@ -1,4 +1,5 @@
 import { type MaxVisitsField, parseMaxVisits } from './max-visits';
+import { normalizeShlinkUrl } from './settings';
 import { parseTags } from './tags';
 
 // Raw values of the popup's form fields.
@@ -46,6 +47,11 @@ export const buildShortUrlBody = (
     maxVisits: parseMaxVisits(form.maxVisits),
   };
 };
+
+// URL of the create-short-URL endpoint (POST /rest/v2/short-urls) on the
+// given Shlink server.
+export const shortUrlsEndpoint = (shlinkUrl: string): string =>
+  `${normalizeShlinkUrl(shlinkUrl)}/rest/v2/short-urls`;
 
 // User-facing message for a non-OK HTTP status from Shlink.
 export const responseErrorMessage = (status: number): string => {
