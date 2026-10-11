@@ -51,6 +51,25 @@ describe('buildShortUrlBody', () => {
     expect(buildShortUrlBody('u', 'Tab', form).customSlug).toBeNull();
   });
 
+  it('trims the custom slug', () => {
+    expect(
+      buildShortUrlBody('u', 'Tab', { ...form, customSlug: '  my-slug \t' })
+        .customSlug,
+    ).toBe('my-slug');
+  });
+
+  it('treats a whitespace-only custom slug as none', () => {
+    expect(
+      buildShortUrlBody('u', 'Tab', { ...form, customSlug: '   ' }).customSlug,
+    ).toBeNull();
+  });
+
+  it.each(['', '   '])('rejects an empty long URL (%j)', (longUrl) => {
+    expect(() => buildShortUrlBody(longUrl, 'Tab', form)).toThrow(
+      'There is no URL to shorten for this tab.',
+    );
+  });
+
   it('sends max visits as a number', () => {
     const body = buildShortUrlBody('u', 'Tab', {
       ...form,
