@@ -13,6 +13,7 @@ import './style.css';
 import { byId } from '@/utils/dom';
 import { parseMaxVisits } from '@/utils/max-visits';
 import type { Settings } from '@/utils/settings';
+import { initialTagsValue } from '@/utils/tags';
 
 interface ShortUrlResult {
   shortUrl: string;
@@ -175,8 +176,6 @@ browser.storage.local.get().then((data: Settings) => {
   });
 
   byId('shlinkUrl').textContent = data.shlinkUrl ?? '';
-  byId<HTMLInputElement>('saveTags').value = data.defaultTags
-    ? data.defaultTags + ' '
-    : '';
+  byId<HTMLInputElement>('saveTags').value = initialTagsValue(data.defaultTags);
   byId('submitBtn').addEventListener('click', handleButtonClick);
 });
