@@ -13,6 +13,12 @@ const icons = {
 export default defineConfig({
   // WXT defaults Firefox to MV2; ship MV3 everywhere.
   manifestVersion: 3,
+  // Vite's <link rel="modulepreload" crossorigin> tags trigger Chrome's
+  // "cross-world extension resource mismatch" warning on extension pages.
+  // The chunks are local files, so preloading buys nothing.
+  vite: () => ({
+    build: { modulePreload: false },
+  }),
   manifest: ({ browser }) => ({
     name: 'Shlink It!',
     description:
