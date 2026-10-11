@@ -23,11 +23,13 @@ describe('toSettings', () => {
         shlinkUrl: 'https://s.example.com',
         apiKey: 'key',
         defaultTags: 'a b',
+        domain: 's2.example.com',
       }),
     ).toEqual({
       shlinkUrl: 'https://s.example.com',
       apiKey: 'key',
       defaultTags: 'a b',
+      domain: 's2.example.com',
     });
   });
 
@@ -39,7 +41,12 @@ describe('toSettings', () => {
 
   it('drops missing and non-string values', () => {
     expect(
-      toSettings({ shlinkUrl: 42, apiKey: null, defaultTags: ['a'] }),
+      toSettings({
+        shlinkUrl: 42,
+        apiKey: null,
+        defaultTags: ['a'],
+        domain: {},
+      }),
     ).toEqual({});
     expect(toSettings({})).toEqual({});
   });
@@ -61,11 +68,13 @@ describe('loadSettings', () => {
       shlinkUrl: 'https://s.example.com/',
       apiKey: 'key',
       defaultTags: 'work',
+      domain: 's2.example.com',
     });
     await expect(loadSettings()).resolves.toEqual({
       shlinkUrl: 'https://s.example.com',
       apiKey: 'key',
       defaultTags: 'work',
+      domain: 's2.example.com',
     });
   });
 

@@ -4,9 +4,12 @@ export interface Settings {
   shlinkUrl?: string;
   apiKey?: string;
   defaultTags?: string;
+  // Shlink domain to create short URLs on; empty or missing means the
+  // server's default domain.
+  domain?: string;
 }
 
-const SETTINGS_KEYS = ['shlinkUrl', 'apiKey', 'defaultTags'] as const;
+const SETTINGS_KEYS = ['shlinkUrl', 'apiKey', 'defaultTags', 'domain'] as const;
 
 // Trims whitespace and trailing slashes off the Shlink server URL, so
 // "https://s.example.com/ " and "https://s.example.com" build the same

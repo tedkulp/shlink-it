@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildShortUrlBody,
+  domainSelectOptions,
+  domainsEndpoint,
+  parseDomains,
   responseErrorMessage,
   shortUrlsEndpoint,
 } from '@/utils/shlink';
@@ -91,6 +94,20 @@ describe('buildShortUrlBody', () => {
     ).toThrow(/positive whole number/);
   });
 
+  it('sends the saved domain, trimmed', () => {
+    expect(buildShortUrlBody('u', 'Tab', form, ' s2.example.com ').domain).toBe(
+      's2.example.com',
+    );
+  });
+
+  it.each([undefined, '', '   '])(
+    'leaves domain out when the saved domain is %j',
+    (domain) => {
+      const body = buildShortUrlBody('u', 'Tab', form, domain);
+      expect(body).not.toHaveProperty('domain');
+    },
+  );
+
   it('throws when the max visits input reports bad input', () => {
     expect(() =>
       buildShortUrlBody('u', 'Tab', {
@@ -144,5 +161,110 @@ describe('shortUrlsEndpoint', () => {
     expect(shortUrlsEndpoint('https://example.com/shlink/')).toBe(
       'https://example.com/shlink/rest/v2/short-urls',
     );
+  });
+});
+
+describe('domainsEndpoint', () => {
+  it.each([
+    'https://s.example.com',
+    'https://s.example.com/',
+    ' https://s.example.com// ',
+  ])('builds the list-domains endpoint from %j', (shlinkUrl) => {
+    expect(domainsEndpoint(shlinkUrl)).toBe(
+      'https://s.example.com/rest/v2/domains',
+    );
+  });
+
+  it('keeps a path prefix', () => {
+    expect(domainsEndpoint('https://example.com/shlink/')).toBe(
+      'https://example.com/shlink/rest/v2/domains',
+    );
+  });
+});
+
+describe('parseDomains', () => {
+  it('returns the domains from a list-domains response', () => {
+    expect(
+      parseDomains({
+        domains: {
+          data: [
+            { domain: 's.example.com', isDefault: true, redirects: {} },
+            { domain: 's2.example.com', isDefault: false, redirects: {} },
+          ],
+          defaultRedirects: {},
+        },
+      }),
+    ).toEqual([
+      { domain: 's.example.com', isDefault: true },
+      { domain: 's2.example.com', isDefault: false },
+    ]);
+  });
+
+  it('returns an empty list when the server has no domains', () => {
+    expect(parseDomains({ domains: { data: [] } })).toEqual([]);
+  });
+
+  it('skips malformed entries', () => {
+    expect(
+      parseDomains({
+        domains: {
+          data: [
+            null,
+            'x',
+            { domain: 42 },
+            { domain: '' },
+            { isDefault: true },
+            { domain: 's2.example.com' },
+          ],
+        },
+      }),
+    ).toEqual([{ domain: 's2.example.com', isDefault: false }]);
+  });
+
+  it.each([
+    null,
+    'nope',
+    [],
+    {},
+    { domains: null },
+    { domains: {} },
+    { domains: { data: 'x' } },
+  ])('rejects a malformed response (%j)', (json) => {
+    expect(() => parseDomains(json)).toThrow(
+      'Unexpected response from the Shlink server when listing domains.',
+    );
+  });
+});
+
+describe('domainSelectOptions', () => {
+  const domains = [
+    { domain: 's.example.com', isDefault: true },
+    { domain: 's2.example.com', isDefault: false },
+    { domain: 's3.example.com', isDefault: false },
+  ];
+
+  it('offers the server default first, then the non-default domains', () => {
+    expect(domainSelectOptions(domains, '')).toEqual([
+      { value: '', label: 'Server default (s.example.com)' },
+      { value: 's2.example.com', label: 's2.example.com' },
+      { value: 's3.example.com', label: 's3.example.com' },
+    ]);
+  });
+
+  it('labels the server default plainly when the default is unknown', () => {
+    expect(domainSelectOptions([], '')).toEqual([
+      { value: '', label: 'Server default' },
+    ]);
+  });
+
+  it('keeps a selected domain the server did not list', () => {
+    expect(domainSelectOptions([], 'old.example.com')).toEqual([
+      { value: '', label: 'Server default' },
+      { value: 'old.example.com', label: 'old.example.com' },
+    ]);
+  });
+
+  it('does not repeat a selected domain that is listed', () => {
+    expect(domainSelectOptions(domains, 's2.example.com')).toHaveLength(3);
   });
 });

@@ -38,6 +38,20 @@
             placeholder="Default tags to add (space separted)"
           />
         </div>
+        <div class="mb-3">
+          <label for="domain" class="form-label">Domain</label>
+          <select class="form-select" id="domain">
+            <option value="">Server default</option>
+          </select>
+          <div id="domainHelp" class="form-text">
+            Domain new short URLs are created on.
+          </div>
+          <div
+            id="domainStatus"
+            class="alert alert-warning mt-2 mb-0 d-none"
+            role="alert"
+          ></div>
+        </div>
         <button type="submit" id="submitBtn" class="btn btn-primary">
           Save
         </button>

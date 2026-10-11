@@ -60,15 +60,20 @@ const createLink = async (settings: Settings, tab: TabInfo) => {
   }
 
   const maxVisitsInput = byId<HTMLInputElement>('saveMaxVisits');
-  const body = buildShortUrlBody(tab.url, tab.title || undefined, {
-    title: byId<HTMLInputElement>('saveTitle').value,
-    tags: byId<HTMLInputElement>('saveTags').value,
-    customSlug: byId<HTMLInputElement>('saveSlug').value,
-    maxVisits: {
-      value: maxVisitsInput.value,
-      badInput: maxVisitsInput.validity.badInput,
+  const body = buildShortUrlBody(
+    tab.url,
+    tab.title || undefined,
+    {
+      title: byId<HTMLInputElement>('saveTitle').value,
+      tags: byId<HTMLInputElement>('saveTags').value,
+      customSlug: byId<HTMLInputElement>('saveSlug').value,
+      maxVisits: {
+        value: maxVisitsInput.value,
+        badInput: maxVisitsInput.validity.badInput,
+      },
     },
-  });
+    settings.domain,
+  );
 
   const headers = new Headers();
   headers.append('accept', 'application/json');
