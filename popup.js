@@ -153,7 +153,7 @@ $(document).ready(() => {
       });
 
     $("#shlinkUrl").text(data.shlinkUrl);
-    $("#saveTags").val(data.defaultTags + " ");
+    $("#saveTags").val(data.defaultTags ? data.defaultTags + " " : "");
     $("#submitBtn").on("click", handleButtonClick);
   });
 });
