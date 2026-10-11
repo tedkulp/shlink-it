@@ -1,0 +1,117 @@
+name: Release
+
+# Push a `v*` tag (`pnpm version minor && git push --follow-tags`) to build
+# Chrome + Firefox zips, attach them to a GitHub Release, and submit the
+# Chrome zip to the Chrome Web Store. Firefox is not submitted to AMO.
+#
+# Run manually (Actions -> Release -> Run workflow) for a dry run: it builds
+# the zips and runs `wxt submit` with DRY_RUN=true, which checks the store
+# credentials without creating a release or uploading anything.
+#
+# Needs Chrome Web Store API v2 repo secrets; see "Releasing" in CLAUDE.md.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, release, submit to Chrome Web Store
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # create the GitHub Release
+    steps:
+      # Fail before building or releasing anything if the store can't be reached.
+      # Secrets are passed only to this step and the submit step, not to
+      # `pnpm install` and the other steps that run third-party code.
+      - name: Check Chrome Web Store secrets
+        env:
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+          CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL: ${{ secrets.CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL }}
+          CHROME_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.CHROME_SERVICE_ACCOUNT_PRIVATE_KEY }}
+        run: |
+          missing=()
+          for name in CHROME_EXTENSION_ID CHROME_PUBLISHER_ID \
+            CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL CHROME_SERVICE_ACCOUNT_PRIVATE_KEY; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            for name in "${missing[@]}"; do
+              echo "::error title=Missing secret::Repo secret $name is not set. See \"Releasing\" in CLAUDE.md."
+            done
+            exit 1
+          fi
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history, to check the tag is on master
+
+      - name: Check tag is on master
+        if: github.event_name == 'push'
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "::error title=Tag not on master::$GITHUB_REF_NAME ($GITHUB_SHA) is not on master. Release from master."
+            exit 1
+          fi
+
+      # pnpm version comes from the `packageManager` field in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Read version and check it matches the tag
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error title=Version mismatch::Tag $GITHUB_REF_NAME does not match package.json version $version. Tag with \`pnpm version\`."
+            exit 1
+          fi
+
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      - run: pnpm zip
+      - run: pnpm zip:firefox
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          zips=(".output/shlink-it-$VERSION-chrome.zip" ".output/shlink-it-$VERSION-firefox.zip")
+          # Re-running a failed job: the release may already exist.
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${zips[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${zips[@]}" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+          fi
+
+      - name: Submit to Chrome Web Store
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+          CHROME_API_VERSION: v2
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+          CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL: ${{ secrets.CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL }}
+          CHROME_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.CHROME_SERVICE_ACCOUNT_PRIVATE_KEY }}
+        run: pnpm wxt submit --chrome-zip ".output/shlink-it-$VERSION-chrome.zip"

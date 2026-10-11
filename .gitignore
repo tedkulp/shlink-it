@@ -1,1 +1,6 @@
 *.zip
+node_modules/
+.output/
+.wxt/
+web-ext.config.ts
+.claude/worktrees/

@@ -8,23 +8,57 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development
 
-There is no build step, package manager, linter, or test suite. The repo root is the unpacked extension.
+Built with [WXT](https://wxt.dev) + TypeScript, managed with pnpm. Requires Node and pnpm.
 
-- Load for testing: Chrome → `chrome://extensions` → Developer mode → "Load unpacked" → select the repo root. Reload the extension after edits.
-- Package for release: zip the repo root (`*.zip` is gitignored). Bump `version` in `manifest.json`.
+- `pnpm install`: install deps (also runs `wxt prepare`, which generates `.wxt/` types).
+- `pnpm dev`: dev build to `.output/chrome-mv3-dev/` with hot reload; launches a browser with the extension loaded. `pnpm dev:firefox` for Firefox.
+- `pnpm build` / `pnpm build:firefox`: production build to `.output/chrome-mv3/` or `.output/firefox-mv3/`. Load the Chrome one via `chrome://extensions` → Developer mode → "Load unpacked".
+- `pnpm zip` / `pnpm zip:firefox`: release zip in `.output/`. The `version` in `package.json` drives the manifest version; see "Releasing" below.
+- `pnpm typecheck` (alias `pnpm compile`): `tsc --noEmit`.
+- `pnpm lint`: Biome check (lint + formatting + import order; config in `biome.json`). `pnpm format` applies Biome's safe fixes and formatting. Style is 2-space indent, single quotes.
+- `pnpm test`: Vitest unit tests in `test/*.test.ts` (`vitest.config.ts` uses WXT's `WxtVitest` plugin, so tests import via `@/`). `pnpm test:watch` for watch mode.
+
+CI (`.github/workflows/ci.yml`, GitHub Actions, Node 24) runs on every pull request and on pushes to `master`. It does a frozen-lockfile install, then the lint, typecheck, test and both browser builds listed above; run the same locally before committing. The pnpm version CI uses comes from `packageManager` in `package.json`; keep it in step with the lockfile, and commit `pnpm-lock.yaml` with any dependency change or the frozen install fails.
+
+## Releasing
+
+Release from an up-to-date, clean `master`:
+
+```sh
+pnpm version minor        # or patch/major: bumps package.json, commits, tags vX.Y.Z
+git push --follow-tags
+```
+
+The first release built by this workflow is `0.2.0` (from `0.1.0` via `pnpm version minor`).
+
+The tag push runs `.github/workflows/release.yml`: it checks the store secrets, fails if the tagged commit isn't on `master` or the tag isn't `v` + the `package.json` version, runs lint/typecheck/test, zips Chrome and Firefox (`pnpm zip`, `pnpm zip:firefox`), creates a GitHub Release for the tag with `shlink-it-X.Y.Z-chrome.zip` and `shlink-it-X.Y.Z-firefox.zip` attached, then runs `wxt submit` to upload the Chrome zip to the existing Chrome Web Store listing and submit it for review. Firefox is not submitted to AMO; its zip is only attached to the release. Re-running a failed job re-uploads the zips to the existing release. Running the workflow manually (Actions → Release → Run workflow) is a dry run: it builds the zips and runs `wxt submit` with `DRY_RUN=true`, which checks the credentials against the store without creating a release or uploading.
+
+`wxt submit` uses Chrome Web Store API v2 with a service account (`CHROME_API_VERSION: v2` in the workflow). Don't switch it to the OAuth client ID / client secret / refresh token flow: that's API v1.1, which Google shuts down on 2026-10-15.
+
+One-time setup (maintainer only), as repo secrets under Settings → Secrets and variables → Actions:
+
+- `CHROME_EXTENSION_ID`: the existing listing's item ID (from its Chrome Web Store URL or the Developer Dashboard).
+- `CHROME_PUBLISHER_ID`: from the Developer Dashboard URL, `https://chrome.google.com/webstore/devconsole/<publisher-id>`.
+- `CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL` and `CHROME_SERVICE_ACCOUNT_PRIVATE_KEY`: follow https://developer.chrome.com/docs/webstore/service-accounts. In a Google Cloud project, enable the Chrome Web Store API, create a service account and download a JSON key ("Use a JSON Web Token"). Then add the service account's email in the Developer Dashboard account settings so it can publish. Use the JSON's `client_email` and `private_key` values; paste the key as a multi-line PEM (`-----BEGIN PRIVATE KEY-----` …), with real newlines in place of the `\n` escapes.
+
+`pnpm wxt submit init` walks through the same values interactively. After adding the secrets, do a manual dry run to confirm them before tagging a release.
 
 ## Architecture
 
-Two independent pages, no background/service worker:
+Two independent WXT entrypoints, no background/service worker:
 
-- `options.html` / `options.js`: settings page. Saves `shlinkUrl`, `apiKey`, `defaultTags` to `browser.storage.local`.
-- `popup.html` / `popup.js`: toolbar popup. Reads those settings, pre-fills URL/title from the active tab, and on submit POSTs to `${shlinkUrl}/rest/v2/short-urls` with the `X-Api-Key` header (`findIfExists: true`, plus title, space-separated tags, optional custom slug and max visits). The result flows through a promise chain: `createLink → validateResponse → copyLinkToClipboard → successNotification → closeWindow`, with `failureNotification` as the catch-all.
+- `entrypoints/options/` (`index.html` + `main.ts`): settings page (opens in a tab). Saves `shlinkUrl` (normalized: trimmed, no trailing slash), `apiKey`, `defaultTags` to `browser.storage.local`. Don't rename these keys; existing installs depend on them.
+- `entrypoints/popup/` (`index.html` + `main.ts` + `style.css`): toolbar popup. Reads those settings, pre-fills URL/title from the active tab, and on submit POSTs to `shortUrlsEndpoint(shlinkUrl)` (`${shlinkUrl}/rest/v2/short-urls`) with the `X-Api-Key` header (`findIfExists: true`, plus title, space-separated tags, optional custom slug and max visits). The form's `submit` handler is attached at load (so Enter never natively reloads the popup) and waits for both the settings and the tab query before sending. The result flows through a promise chain: `createLink` (async, so any throw inside it is caught) `→ validateResponse → copyLinkToClipboard → successNotification → closeWindow`, with `failureNotification` as the catch-all.
+- `utils/`: helpers shared by entrypoints. Pure ones are unit-tested in `test/`: `shlink.ts` (`buildShortUrlBody` builds the create-short-URL request body from the raw form values, trimming the custom slug and throwing on an empty long URL; `shortUrlsEndpoint` builds the POST URL from the server URL; `responseErrorMessage` maps a non-OK HTTP status to the user-facing 4xx / 5xx / other message), `settings.ts` (`normalizeShlinkUrl` trims whitespace and trailing slashes; `toSettings` keeps only the known string keys from storage; `loadSettings` reads them from `browser.storage.local`, tested with WXT's `fakeBrowser`; both entrypoints load settings through it), `tags.ts` (`parseTags` splits the Tags field on spaces; `initialTagsValue` is the field's pre-fill), `max-visits.ts` (`parseMaxVisits` takes the Max Visits input's `value` plus its `validity.badInput` flag and returns a positive integer or `null`; it accepts any whole number a number input does, e.g. `1e3` or `10.0`, and throws on bad input). Keep DOM and `browser` calls in the entrypoints and logic in these helpers. `dom.ts` (`byId`, which throws if an element id is missing) touches `document` and is covered by the manual check instead.
+- `public/` is copied verbatim to the build root (icons live in `public/images/`).
+
+The manifest is generated by WXT from `wxt.config.ts` plus the entrypoints; there is no `manifest.json` in the repo. Both Chrome and Firefox build as MV3 (`manifestVersion: 3`); the Firefox build adds the gecko id `shlink-it@tedkulp.com`.
 
 Conventions:
 
-- Code uses the `browser.*` API (promise-based) via the vendored `webextension-polyfill`, not `chrome.*`.
-- DOM work uses vendored jQuery 3.6; styling is vendored Bootstrap 5. Everything under `vendor/` is third-party minified code; don't edit it.
-- Permissions are declared in `manifest.json` (`storage`, `activeTab`, `notifications`, `clipboardWrite`). Adding a browser API usually needs a matching permission there.
+- Code uses WXT's `browser` global (promise-based), not `chrome.*` and not `webextension-polyfill`.
+- DOM work uses plain DOM APIs (`byId` from `utils/dom.ts`, `.value`, `.textContent`, `addEventListener`); no jQuery. Styling is Bootstrap 5.0 CSS from npm (pinned to the version that used to be vendored), imported in each entrypoint's `main.ts`.
+- Permissions are declared in `wxt.config.ts` (`storage`, `activeTab`, `notifications`, `clipboardWrite`). Adding a browser API usually needs a matching permission there. There are deliberately no `host_permissions`; see `docs/adr/0001-rely-on-shlink-cors-not-host-permissions.md`.
 
 ## Agent skills
 
