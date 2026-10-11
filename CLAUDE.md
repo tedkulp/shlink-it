@@ -13,12 +13,33 @@ Built with [WXT](https://wxt.dev) + TypeScript, managed with pnpm. Requires Node
 - `pnpm install`: install deps (also runs `wxt prepare`, which generates `.wxt/` types).
 - `pnpm dev`: dev build to `.output/chrome-mv3-dev/` with hot reload; launches a browser with the extension loaded. `pnpm dev:firefox` for Firefox.
 - `pnpm build` / `pnpm build -b firefox`: production build to `.output/chrome-mv3/` or `.output/firefox-mv3/`. Load the Chrome one via `chrome://extensions` → Developer mode → "Load unpacked".
-- `pnpm zip` / `pnpm zip:firefox`: release zip in `.output/`. Bump `version` in `package.json` (it drives the manifest version).
+- `pnpm zip` / `pnpm zip:firefox`: release zip in `.output/`. The `version` in `package.json` drives the manifest version; see "Releasing" below.
 - `pnpm typecheck` (alias `pnpm compile`): `tsc --noEmit`.
 - `pnpm lint`: Biome check (lint + formatting + import order; config in `biome.json`). `pnpm format` applies Biome's safe fixes and formatting. Style is 2-space indent, single quotes.
 - `pnpm test`: Vitest unit tests in `test/*.test.ts` (`vitest.config.ts` uses WXT's `WxtVitest` plugin, so tests import via `@/`). `pnpm test:watch` for watch mode.
 
 CI (`.github/workflows/ci.yml`, GitHub Actions, Node 24) runs on every pull request and on pushes to `master`. It does a frozen-lockfile install, then the lint, typecheck, test and both browser builds listed above; run the same locally before committing. The pnpm version CI uses comes from `packageManager` in `package.json`; keep it in step with the lockfile, and commit `pnpm-lock.yaml` with any dependency change or the frozen install fails.
+
+## Releasing
+
+Release from an up-to-date, clean `master`:
+
+```sh
+pnpm version minor        # or patch/major: bumps package.json, commits, tags vX.Y.Z
+git push --follow-tags
+```
+
+The tag push runs `.github/workflows/release.yml`: it checks the store secrets, fails if the tag isn't `v` + the `package.json` version, runs lint/typecheck/test, zips Chrome and Firefox (`pnpm zip`, `pnpm zip -b firefox`), creates a GitHub Release for the tag with `shlink-it-X.Y.Z-chrome.zip` and `shlink-it-X.Y.Z-firefox.zip` attached, then runs `wxt submit` to upload the Chrome zip to the existing Chrome Web Store listing and submit it for review. Firefox is not submitted to AMO; its zip is only attached to the release. Re-running a failed job re-uploads the zips to the existing release. Running the workflow manually (Actions → Release → Run workflow) is a dry run: it builds the zips and runs `wxt submit` with `DRY_RUN=true`, which checks the credentials against the store without creating a release or uploading.
+
+`wxt submit` uses Chrome Web Store API v2 with a service account (`CHROME_API_VERSION: v2` in the workflow). Don't switch it to the OAuth client ID / client secret / refresh token flow: that's API v1.1, which Google shuts down on 2026-10-15.
+
+One-time setup (maintainer only), as repo secrets under Settings → Secrets and variables → Actions:
+
+- `CHROME_EXTENSION_ID`: the existing listing's item ID (from its Chrome Web Store URL or the Developer Dashboard).
+- `CHROME_PUBLISHER_ID`: from the Developer Dashboard URL, `https://chrome.google.com/webstore/devconsole/<publisher-id>`.
+- `CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL` and `CHROME_SERVICE_ACCOUNT_PRIVATE_KEY`: follow https://developer.chrome.com/docs/webstore/service-accounts. In a Google Cloud project, enable the Chrome Web Store API, create a service account and download a JSON key ("Use a JSON Web Token"). Then add the service account's email in the Developer Dashboard account settings so it can publish. Use the JSON's `client_email` and `private_key` values; paste the key as a multi-line PEM (`-----BEGIN PRIVATE KEY-----` …), with real newlines in place of the `\n` escapes.
+
+`pnpm wxt submit init` walks through the same values interactively. After adding the secrets, do a manual dry run to confirm them before tagging a release.
 
 ## Architecture
 

@@ -1,0 +1,104 @@
+name: Release
+
+# Push a `v*` tag (`pnpm version minor && git push --follow-tags`) to build
+# Chrome + Firefox zips, attach them to a GitHub Release, and submit the
+# Chrome zip to the Chrome Web Store. Firefox is not submitted to AMO.
+#
+# Run manually (Actions -> Release -> Run workflow) for a dry run: it builds
+# the zips and runs `wxt submit --dry-run` to check the store credentials,
+# without creating a release or uploading anything.
+#
+# Required repo secrets (Chrome Web Store API v2, service account auth):
+#   CHROME_EXTENSION_ID, CHROME_PUBLISHER_ID,
+#   CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL, CHROME_SERVICE_ACCOUNT_PRIVATE_KEY
+# See "Releasing" in CLAUDE.md for how to create them.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, release, submit to Chrome Web Store
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # create the GitHub Release
+    env:
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+      CHROME_API_VERSION: v2
+      CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+      CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+      CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL: ${{ secrets.CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL }}
+      CHROME_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.CHROME_SERVICE_ACCOUNT_PRIVATE_KEY }}
+    steps:
+      # Fail before building or releasing anything if the store can't be reached.
+      - name: Check Chrome Web Store secrets
+        run: |
+          missing=()
+          for name in CHROME_EXTENSION_ID CHROME_PUBLISHER_ID \
+            CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL CHROME_SERVICE_ACCOUNT_PRIVATE_KEY; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            for name in "${missing[@]}"; do
+              echo "::error title=Missing secret::Repo secret $name is not set. See \"Releasing\" in CLAUDE.md."
+            done
+            exit 1
+          fi
+
+      - uses: actions/checkout@v6
+
+      # pnpm version comes from the `packageManager` field in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Read version
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error title=Version mismatch::Tag $GITHUB_REF_NAME does not match package.json version $version. Tag with \`pnpm version\`."
+            exit 1
+          fi
+
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      - run: pnpm zip
+      - run: pnpm zip -b firefox
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          zips=(".output/shlink-it-$VERSION-chrome.zip" ".output/shlink-it-$VERSION-firefox.zip")
+          # Re-running a failed job: the release may already exist.
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${zips[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${zips[@]}" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+          fi
+
+      - name: Submit to Chrome Web Store
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: pnpm wxt submit --chrome-zip ".output/shlink-it-$VERSION-chrome.zip"
