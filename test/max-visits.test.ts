@@ -1,20 +1,19 @@
-import assert from 'node:assert';
-import test from 'node:test';
-import { parseMaxVisits } from '../utils/max-visits.ts';
+import { describe, expect, it } from 'vitest';
+import { parseMaxVisits } from '@/utils/max-visits';
 
-test('empty input means unlimited (null)', () => {
-  assert.strictEqual(parseMaxVisits(''), null);
-  assert.strictEqual(parseMaxVisits('  '), null);
-  assert.strictEqual(parseMaxVisits(undefined), null);
-});
+describe('parseMaxVisits', () => {
+  it('treats empty input as unlimited (null)', () => {
+    expect(parseMaxVisits('')).toBeNull();
+    expect(parseMaxVisits('  ')).toBeNull();
+    expect(parseMaxVisits(undefined)).toBeNull();
+  });
 
-test('positive integers are sent as numbers', () => {
-  assert.strictEqual(parseMaxVisits('5'), 5);
-  assert.strictEqual(parseMaxVisits(' 12 '), 12);
-});
+  it('sends positive integers as numbers', () => {
+    expect(parseMaxVisits('5')).toBe(5);
+    expect(parseMaxVisits(' 12 ')).toBe(12);
+  });
 
-test('non-numeric, zero, negative and fractional input is rejected', () => {
-  for (const bad of ['abc', '0', '-3', '1.5', '1e3', '5x']) {
-    assert.throws(() => parseMaxVisits(bad), /positive whole number/, bad);
-  }
+  it.each(['abc', '0', '-3', '1.5', '1e3', '5x'])('rejects %j', (bad) => {
+    expect(() => parseMaxVisits(bad)).toThrow(/positive whole number/);
+  });
 });

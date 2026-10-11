@@ -15,9 +15,6 @@ importers:
       '@biomejs/biome':
         specifier: ^2.5.15
         version: 2.5.15
-      '@types/node':
-        specifier: ^24.19.2
-        version: 24.19.2
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -1088,6 +1085,7 @@ snapshots:
   '@types/node@24.19.2':
     dependencies:
       undici-types: 7.24.6
+    optional: true
 
   '@vitest/mocker@5.0.3(vite@8.3.4(@types/node@24.19.2)(jiti@2.7.0))':
     dependencies:
@@ -1523,7 +1521,8 @@ snapshots:
 
   uhyphen@0.2.0: {}
 
-  undici-types@7.24.6: {}
+  undici-types@7.24.6:
+    optional: true
 
   unimport@6.5.0(rolldown@1.2.13)(vite@8.3.4(@types/node@24.19.2)(jiti@2.7.0)):
     dependencies:
