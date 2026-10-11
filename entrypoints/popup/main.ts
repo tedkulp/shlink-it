@@ -10,7 +10,7 @@
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './style.css';
-import $ from 'jquery';
+import { byId } from '@/utils/dom';
 import { parseMaxVisits } from '@/utils/max-visits';
 import type { Settings } from '@/utils/settings';
 
@@ -18,166 +18,168 @@ interface ShortUrlResult {
   shortUrl: string;
 }
 
-$(() => {
-  browser.storage.local.get().then((data: Settings) => {
-    const createLink = (url: string, defaultTitle: string) => {
-      console.debug(url);
+// Module scripts run after the document is parsed, so the DOM is ready here.
+browser.storage.local.get().then((data: Settings) => {
+  const createLink = (url: string, defaultTitle: string) => {
+    console.debug(url);
 
-      if (!data.apiKey) {
-        return Promise.reject(
-          new Error(
-            'API Key is not set. Please use the Settings screen to configure the extension.',
-          ),
-        );
-      }
-
-      if (!data.shlinkUrl) {
-        return Promise.reject(
-          new Error(
-            'Shlink URL is not set. Please use the Settings screen to configure the extension.',
-          ),
-        );
-      }
-
-      const title = $<HTMLInputElement>('#saveTitle').val() || defaultTitle;
-      const tags = ($<HTMLInputElement>('#saveTags').val() || '')
-        .split(' ')
-        .filter((s) => s && s !== '');
-      const customSlug = $<HTMLInputElement>('#saveSlug').val() || null;
-      // A number input reports unparseable text (e.g. "abc") as "", so
-      // check badInput to reject it instead of treating it as unlimited.
-      const maxVisitsInput = $<HTMLInputElement>('#saveMaxVisits')[0]!;
-      let maxVisits: number | null;
-      try {
-        maxVisits = parseMaxVisits(
-          maxVisitsInput.validity.badInput ? 'invalid' : maxVisitsInput.value,
-        );
-      } catch (e) {
-        return Promise.reject(e);
-      }
-
-      console.debug('tags', tags);
-
-      const headers = new Headers();
-      headers.append('accept', 'application/json');
-      headers.append('Content-Type', 'application/json');
-      headers.append('X-Api-Key', data.apiKey);
-
-      const options = {
-        longUrl: url,
-        findIfExists: true,
-        title,
-        tags,
-        customSlug,
-        maxVisits,
-      };
-
-      console.debug('options', options);
-
-      return fetch(
-        new Request(`${data.shlinkUrl}/rest/v2/short-urls`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(options),
-        }),
-      );
-    };
-
-    let saveUrl = '';
-    let saveTitle = '';
-
-    const successNotification = (result: ShortUrlResult) => {
-      return browser.notifications.create({
-        type: 'basic',
-        title: 'Shlink created!',
-        iconUrl: 'images/shlink-64.png',
-        message: `${result.shortUrl} was copied to your clipboard.`,
-      });
-    };
-
-    const failureNotification = (error: Error) => {
-      return browser.notifications.create({
-        type: 'basic',
-        title: 'Failed to create Shlink!',
-        iconUrl: 'images/shlink-64.png',
-        message: error.message,
-      });
-    };
-
-    function copyLinkToClipboard(result: ShortUrlResult) {
-      return navigator.clipboard.writeText(result.shortUrl).then(
-        () => Promise.resolve(result),
-        (e: Error) => {
-          console.error(e);
-          return Promise.reject(
-            new Error(`Failed to copy to clipboard. ${e.message}`),
-          );
-        },
+    if (!data.apiKey) {
+      return Promise.reject(
+        new Error(
+          'API Key is not set. Please use the Settings screen to configure the extension.',
+        ),
       );
     }
 
-    function validateResponse(
-      fetchResponse: Response,
-    ): Promise<ShortUrlResult> {
-      if (fetchResponse.ok) {
-        return fetchResponse.json();
-      } else if (fetchResponse.status >= 400 && fetchResponse.status < 500) {
-        return Promise.reject(
-          new Error(
-            `Got error code ${fetchResponse.status}. ` +
-              "Please check if you've configured the Shlink extension correctly.",
-          ),
-        );
-      } else if (fetchResponse.status >= 500 && fetchResponse.status < 600) {
-        return Promise.reject(
-          new Error(
-            `Got error code ${fetchResponse.status}. ` +
-              'Please check if the Shlink server is properly configured.',
-          ),
-        );
-      } else {
-        return Promise.reject(
-          new Error(
-            `Got unknown error code ${fetchResponse.status}. Please try again later.`,
-          ),
-        );
-      }
+    if (!data.shlinkUrl) {
+      return Promise.reject(
+        new Error(
+          'Shlink URL is not set. Please use the Settings screen to configure the extension.',
+        ),
+      );
     }
 
-    const closeWindow = () => {
-      const tm = setTimeout(() => {
-        clearTimeout(tm);
-        window.close();
-      }, 500);
+    const title = byId<HTMLInputElement>('saveTitle').value || defaultTitle;
+    const tags = byId<HTMLInputElement>('saveTags')
+      .value.split(' ')
+      .filter((s) => s && s !== '');
+    const customSlug = byId<HTMLInputElement>('saveSlug').value || null;
+    // A number input reports unparseable text (e.g. "abc") as "", so
+    // check badInput to reject it instead of treating it as unlimited.
+    const maxVisitsInput = byId<HTMLInputElement>('saveMaxVisits');
+    let maxVisits: number | null;
+    try {
+      maxVisits = parseMaxVisits(
+        maxVisitsInput.validity.badInput ? 'invalid' : maxVisitsInput.value,
+      );
+    } catch (e) {
+      return Promise.reject(e);
+    }
+
+    console.debug('tags', tags);
+
+    const headers = new Headers();
+    headers.append('accept', 'application/json');
+    headers.append('Content-Type', 'application/json');
+    headers.append('X-Api-Key', data.apiKey);
+
+    const options = {
+      longUrl: url,
+      findIfExists: true,
+      title,
+      tags,
+      customSlug,
+      maxVisits,
     };
 
-    const handleButtonClick = (evt?: JQuery.Event) => {
-      if (evt) evt.preventDefault();
+    console.debug('options', options);
 
-      createLink(saveUrl, saveTitle)
-        .then(validateResponse)
-        .then(copyLinkToClipboard)
-        .then(successNotification)
-        .then(closeWindow)
-        .catch(failureNotification);
-    };
+    return fetch(
+      new Request(`${data.shlinkUrl}/rest/v2/short-urls`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(options),
+      }),
+    );
+  };
 
-    browser.tabs
-      .query({ active: true, currentWindow: true })
-      .then((tabData) => {
-        console.debug('Tab Data', tabData);
+  let saveUrl = '';
+  let saveTitle = '';
 
-        // Same as the original JS: these may be undefined on special pages.
-        const tab = tabData[0]!;
-        saveUrl = tab.url as string;
-        saveTitle = tab.title as string;
+  const successNotification = (result: ShortUrlResult) => {
+    return browser.notifications.create({
+      type: 'basic',
+      title: 'Shlink created!',
+      iconUrl: 'images/shlink-64.png',
+      message: `${result.shortUrl} was copied to your clipboard.`,
+    });
+  };
 
-        $('#saveUrl').val(saveUrl);
-        $('#saveTitle').val(saveTitle);
-      });
+  const failureNotification = (error: Error) => {
+    return browser.notifications.create({
+      type: 'basic',
+      title: 'Failed to create Shlink!',
+      iconUrl: 'images/shlink-64.png',
+      message: error.message,
+    });
+  };
 
-    $('#shlinkUrl').text(data.shlinkUrl as string);
-    $('#saveTags').val(data.defaultTags ? data.defaultTags + ' ' : '');
-    $('#submitBtn').on('click', handleButtonClick);
-  });
+  function copyLinkToClipboard(result: ShortUrlResult) {
+    return navigator.clipboard.writeText(result.shortUrl).then(
+      () => Promise.resolve(result),
+      (e: Error) => {
+        console.error(e);
+        return Promise.reject(
+          new Error(`Failed to copy to clipboard. ${e.message}`),
+        );
+      },
+    );
+  }
+
+  function validateResponse(
+    fetchResponse: Response,
+  ): Promise<ShortUrlResult> {
+    if (fetchResponse.ok) {
+      return fetchResponse.json();
+    } else if (fetchResponse.status >= 400 && fetchResponse.status < 500) {
+      return Promise.reject(
+        new Error(
+          `Got error code ${fetchResponse.status}. ` +
+            "Please check if you've configured the Shlink extension correctly.",
+        ),
+      );
+    } else if (fetchResponse.status >= 500 && fetchResponse.status < 600) {
+      return Promise.reject(
+        new Error(
+          `Got error code ${fetchResponse.status}. ` +
+            'Please check if the Shlink server is properly configured.',
+        ),
+      );
+    } else {
+      return Promise.reject(
+        new Error(
+          `Got unknown error code ${fetchResponse.status}. Please try again later.`,
+        ),
+      );
+    }
+  }
+
+  const closeWindow = () => {
+    const tm = setTimeout(() => {
+      clearTimeout(tm);
+      window.close();
+    }, 500);
+  };
+
+  const handleButtonClick = (evt?: Event) => {
+    if (evt) evt.preventDefault();
+
+    createLink(saveUrl, saveTitle)
+      .then(validateResponse)
+      .then(copyLinkToClipboard)
+      .then(successNotification)
+      .then(closeWindow)
+      .catch(failureNotification);
+  };
+
+  browser.tabs
+    .query({ active: true, currentWindow: true })
+    .then((tabData) => {
+      console.debug('Tab Data', tabData);
+
+      // Same as the original JS: these may be undefined on special pages.
+      const tab = tabData[0]!;
+      saveUrl = tab.url as string;
+      saveTitle = tab.title as string;
+
+      // jQuery's .val(undefined) cleared the field; keep that, not "undefined".
+      byId<HTMLInputElement>('saveUrl').value = saveUrl ?? '';
+      byId<HTMLInputElement>('saveTitle').value = saveTitle ?? '';
+    });
+
+  byId('shlinkUrl').textContent = data.shlinkUrl ?? '';
+  byId<HTMLInputElement>('saveTags').value = data.defaultTags
+    ? data.defaultTags + ' '
+    : '';
+  byId('submitBtn').addEventListener('click', handleButtonClick);
 });
